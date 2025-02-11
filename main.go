@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	startIP       = "192.168.1.1"   // Замените на ваш начальный IP
-	endIP         = "192.168.1.255" // Замените на ваш конечный IP
-	startPort     = 1
+	startIP       = "192.168.1.1"   // берём диапозон локальный апишек
+	endIP         = "192.168.1.255" 
+	startPort     = 1                // тут мы выбираем диавазон портов
 	endPort       = 65535
 	numPackets    = 1000
 	packetSize    = 1024
-	numGoroutines = 100
+	numGoroutines = 100              
 )
 
 func loadNetwork(wg *sync.WaitGroup, ip, port string) {
